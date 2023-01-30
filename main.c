@@ -121,18 +121,18 @@ void USART_Configure(void)
     LL_USART_Enable(USART2);
 }
 void TIM2_IRQHandler(void){
-	if(LL_TIM_IsActiveFlag_CC2(TIM2) == SET){
-		LL_TIM_ClearFlag_CC2(TIM2);
+	if(LL_TIM_IsActiveFlag_CC2(TIM3) == SET){
+		LL_TIM_ClearFlag_CC2(TIM3);
 		//Detect 1st risinng edge
 		if(uhICIndex == 0){
-			uwIC1 = LL_TIM_IC_GetCaptureCH2(TIM2);
+			uwIC1 = LL_TIM_IC_GetCaptureCH2(TIM3);
 			uhICIndex = 1;
 		} else if(uhICIndex == 1){
-			uwIC2 = LL_TIM_IC_GetCaptureCH2(TIM2);
+			uwIC2 = LL_TIM_IC_GetCaptureCH2(TIM3);
 			if(uwIC2 > uwIC1)
 				uwDiff = uwIC2 - uwIC1;
 			else if(uwIC2 < uwIC1)
-				uwDiff = ((LL_TIM_GetAutoReload(TIM2) - uwIC1) + uwIC2) + 1;
+				uwDiff = ((LL_TIM_GetAutoReload(TIM3) - uwIC1) + uwIC2) + 1;
 			uhICIndex = 2;
 		}
 	}
@@ -146,21 +146,21 @@ void TIMX_IC_Config(void){
 	timic.ICFilter = LL_TIM_IC_FILTER_FDIV1_N2;
 	timic.ICPolarity = LL_TIM_IC_POLARITY_BOTHEDGE;
 	timic.ICPrescaler = LL_TIM_ICPSC_DIV1;
-	LL_TIM_IC_Init(TIM2, LL_TIM_CHANNEL_CH2, &timic);
+	LL_TIM_IC_Init(TIM3, LL_TIM_CHANNEL_CH2, &timic);
 	
-	NVIC_SetPriority(TIM2_IRQn, 0);
+	NVIC_SetPriority(TIM3_IRQn, 0);
 	
-	NVIC_EnableIRQ(TIM2_IRQn);
-	LL_TIM_EnableIT_CC2(TIM2);
-	LL_TIM_CC_EnableChannel(TIM2, LL_TIM_CHANNEL_CH2);
-	LL_TIM_EnableCounter(TIM2);
+	NVIC_EnableIRQ(TIM3_IRQn);
+	LL_TIM_EnableIT_CC2(TIM3);
+	LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH2);
+	LL_TIM_EnableCounter(TIM3);
 }
 
 void GPIO_Cofig(void){
 	LL_GPIO_InitTypeDef timic_gpio;
-	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
+	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
 	//GPIO_Config
-	timic_gpio.Pin = LL_GPIO_PIN_2;
+	timic_gpio.Pin = LL_GPIO_PIN_4;
 	timic_gpio.Mode = LL_GPIO_MODE_OUTPUT;
 	timic_gpio.Pull = LL_GPIO_PULL_NO;
 	timic_gpio.OutputType = LL_GPIO_OUTPUT_PUSHPULL ;
@@ -168,25 +168,9 @@ void GPIO_Cofig(void){
 	LL_GPIO_Init(GPIOA,&timic_gpio);
 	
 	timic_gpio.Mode = LL_GPIO_MODE_ALTERNATE;
-	timic_gpio.Alternate = LL_GPIO_AF_1;
-	timic_gpio.Pin = LL_GPIO_PIN_1;
+	timic_gpio.Alternate = LL_GPIO_AF_2;
+	timic_gpio.Pin = LL_GPIO_PIN_5;
 	LL_GPIO_Init(GPIOA,&timic_gpio);
-	
-	//configure ltc4727js
-	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
-	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOC);
-	
-	LL_GPIO_InitTypeDef ltc4727_initstruct;
-	ltc4727_initstruct.Mode = LL_GPIO_MODE_OUTPUT;
-	ltc4727_initstruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-	ltc4727_initstruct.Pull = LL_GPIO_PULL_NO;
-	ltc4727_initstruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
-	ltc4727_initstruct.Pin = LL_GPIO_PIN_2 | LL_GPIO_PIN_10 | LL_GPIO_PIN_11 | LL_GPIO_PIN_12 |
-													 LL_GPIO_PIN_13 | LL_GPIO_PIN_14 | LL_GPIO_PIN_15;
-	LL_GPIO_Init(GPIOB, &ltc4727_initstruct);
-	
-	ltc4727_initstruct.Pin = LL_GPIO_PIN_0 | LL_GPIO_PIN_1 | LL_GPIO_PIN_2 |LL_GPIO_PIN_3;
-	LL_GPIO_Init(GPIOC, &ltc4727_initstruct);
 
 }
 void SystemClock_Config(void)
