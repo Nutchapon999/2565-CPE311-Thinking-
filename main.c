@@ -1,16 +1,18 @@
 #include "stm32l1xx.h"
 #include "stm32l1xx_ll_system.h"
-#include "stm32l1xx_ll_rcc.h"
-#include "stm32l1xx_ll_gpio.h"
-#include "stm32l1xx_ll_pwr.h"
-#include "stm32l1xx_ll_utils.h"
 #include "stm32l1xx_ll_bus.h"
+#include "stm32l1xx_ll_utils.h"
+#include "stm32l1xx_ll_rcc.h"
+#include "stm32l1xx_ll_pwr.h"
+#include "stm32l1xx_ll_gpio.h"
 #include "stm32l1xx_ll_usart.h"
+#include "stm32l1xx_ll_lcd.h"
+#include "stm32l152_glass_lcd.h"
 #include "stm32l1xx_ll_tim.h"
-#include "math.h"
-#include "stdio.h"
 #include "string.h"
-#include "stdlib.h"
+#include "math.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 /*uint8_t usr_button = 0;
 unsigned int state = 0;*/
@@ -18,8 +20,12 @@ void GPIO_USART_Configure(void);
 void SystemClock_Config(void);
 void USART_Configure(void);
 void USART_SendString(uint8_t*, uint8_t);
-void SystemClock_Config(void);
-void GPIO_Cofig(void);
+
+void TCS3200_Config(void); //Color Sensor
+void Ultrasonic_Config(void); //Ultrasonic senser
+void Speaker_Config(void); //Speaker Module
+
+//TIM
 void TIMX_IC_Config(void);
 
 uint16_t uwIC1 = 0;
@@ -33,34 +39,36 @@ int distant, i;
 
 uint8_t recv_buffer[10];
 uint8_t idx = 0;
-uint8_t test[]="";
 
 int main()
  {
-		char text[4];
+
+		SystemClock_Config();
+		TIMX_IC_Config();
+		Ultrasonic_Config();
+		int number = 4532;
+		uint8_t text[] ="            ";
+	  //sprintf(text,"%d",number);
 		USART_Configure();
-		//USART_SendString(test,sizeof(test));
+		//USART_SendString(text,sizeof(text));
 		while(1){
-		LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_2);
-		LL_mDelay(1);
-		LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_2);
-		if(uhICIndex == 2){
-			//Period Calculation
-			PSC = LL_TIM_GetPrescaler(TIM2) + 1;
-			TIM2CLK = SystemCoreClock / PSC;
-			IC1PSC = __LL_TIM_GET_ICPSC_RATIO(LL_TIM_IC_GetPrescaler(TIM2, LL_TIM_CHANNEL_CH1));
+			LL_GPIO_SetOutputPin(GPIOB, LL_GPIO_PIN_4);
+			LL_mDelay(1);
+			LL_GPIO_ResetOutputPin(GPIOB, LL_GPIO_PIN_4);
+			if(uhICIndex == 2){
+				PSC = LL_TIM_GetPrescaler(TIM3) + 1;
+				TIM2CLK = SystemCoreClock / PSC;
+				IC1PSC = __LL_TIM_GET_ICPSC_RATIO(LL_TIM_IC_GetPrescaler(TIM3, LL_TIM_CHANNEL_CH2));
+//				period = (uwDiff*(PSC) * 1.0) / (TIM2CLK * IC1PSC * 1.0);
+//				distant = (pow(10, 2)*340*period)/2;
+				distant = ((uwDiff*340.0*pow(10,2))/2.0)/SystemCoreClock;
+				sprintf(text, "%02d", distant);
+				USART_SendString(text,sizeof(text));
+				LL_mDelay(3000);
+			}
+		
 			
-			//period = (uwDiff*(PSC) * 1.0) / (TIM2CLK * IC1PSC * 1.0);
-			//distant = (pow(10, 2)*340*period)/2;
-		  distant = ((uwDiff*340.0*pow(10,2))/2.0)/SystemCoreClock;
-			sprintf(text, "%02d", distant);  // Format the integer as a two-digit string
-			
-			//**convert string or int to uint8_t array**
-			
-			//USART_SendString(test,sizeof(test));
-			
-		}
-		}
+	}
 }
 void USART_SendString(uint8_t* str, uint8_t size)
 {
@@ -72,34 +80,83 @@ void USART_SendString(uint8_t* str, uint8_t size)
 		++i;
 	}
 }	
+void TCS3200_Config(void)
+{
+	//TCS3200 config
+	LL_GPIO_InitTypeDef gpio_conf;
+
+	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
+	
+	gpio_conf.Pin = LL_GPIO_PIN_10 | LL_GPIO_PIN_11 | LL_GPIO_PIN_12 | LL_GPIO_PIN_13 ; //Input mode S0-S3
+	gpio_conf.Mode = LL_GPIO_MODE_INPUT;
+	gpio_conf.Pull = LL_GPIO_PULL_UP;
+	gpio_conf.Speed =LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  LL_GPIO_Init(GPIOB, &gpio_conf);
+	
+	gpio_conf.Pin = LL_GPIO_PIN_14; //LED Output mode 
+	gpio_conf.Mode = LL_GPIO_MODE_OUTPUT;
+	gpio_conf.Pull = LL_GPIO_PULL_UP;
+	gpio_conf.Speed =LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+  LL_GPIO_Init(GPIOB, &gpio_conf);
+	
+}
+void Ultrasonic_Config(void)
+{
+	LL_GPIO_InitTypeDef timic_gpio;
+	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
+	//GPIO_Config
+	timic_gpio.Pin = LL_GPIO_PIN_4;
+	timic_gpio.Mode = LL_GPIO_MODE_OUTPUT;
+	timic_gpio.Pull = LL_GPIO_PULL_NO;
+	timic_gpio.OutputType = LL_GPIO_OUTPUT_PUSHPULL ;
+	timic_gpio.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	LL_GPIO_Init(GPIOB,&timic_gpio);
+	
+	timic_gpio.Mode = LL_GPIO_MODE_ALTERNATE;
+	timic_gpio.Alternate = LL_GPIO_AF_2;
+	timic_gpio.Pin = LL_GPIO_PIN_5;
+	LL_GPIO_Init(GPIOB,&timic_gpio);
+	
+}
+void Speaker_Config(void)
+{
+	LL_GPIO_InitTypeDef gpio_conf;
+
+	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
+	
+	gpio_conf.Pin = LL_GPIO_PIN_7 ;
+  gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+	gpio_conf.Pull = LL_GPIO_PULL_NO;
+	gpio_conf.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	gpio_conf.Mode = LL_GPIO_MODE_OUTPUT;
+  LL_GPIO_Init(GPIOB, &gpio_conf);
+}
+
 void GPIO_USART_Configure(void)
 {
 	LL_GPIO_InitTypeDef gpio_conf;
-	
+
 	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
-	
-	gpio_conf.Pin = LL_GPIO_PIN_2;
+  //Tx Rx
+	gpio_conf.Pin = LL_GPIO_PIN_2 |LL_GPIO_PIN_3 ;
 	gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
 	gpio_conf.Pull = LL_GPIO_PULL_UP;
 	gpio_conf.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
 	gpio_conf.Mode = LL_GPIO_MODE_ALTERNATE;
 	gpio_conf.Alternate = LL_GPIO_AF_7;
 	LL_GPIO_Init(GPIOA, &gpio_conf);
-	
-	gpio_conf.Pin = LL_GPIO_PIN_3;
-	LL_GPIO_Init(GPIOA, &gpio_conf);
-	
+
+
 	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
-                 
+  //Button PB6 and PB7???
 	gpio_conf.Mode = LL_GPIO_MODE_OUTPUT;
 	gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
 	gpio_conf.Pull = LL_GPIO_PULL_NO;
 	gpio_conf.Speed = LL_GPIO_SPEED_FREQ_HIGH;
-	
-	gpio_conf.Pin = LL_GPIO_PIN_6;
-	LL_GPIO_Init(GPIOB, &gpio_conf);
-	
-	gpio_conf.Pin = LL_GPIO_PIN_7;
+
+	gpio_conf.Pin = LL_GPIO_PIN_6 |LL_GPIO_PIN_7 ;
 	LL_GPIO_Init(GPIOB, &gpio_conf);
 
 }
@@ -116,11 +173,12 @@ void USART_Configure(void)
     usart_conf.StopBits = LL_USART_STOPBITS_1;
     usart_conf.OverSampling = LL_USART_OVERSAMPLING_16;
     usart_conf.TransferDirection = LL_USART_DIRECTION_TX_RX;
-	
+
     LL_USART_Init(USART2, &usart_conf);
     LL_USART_Enable(USART2);
 }
-void TIM2_IRQHandler(void){
+
+void TIM3_IRQHandler(void){
 	if(LL_TIM_IsActiveFlag_CC2(TIM3) == SET){
 		LL_TIM_ClearFlag_CC2(TIM3);
 		//Detect 1st risinng edge
@@ -151,12 +209,13 @@ void TIMX_IC_Config(void){
 	NVIC_SetPriority(TIM3_IRQn, 0);
 	
 	NVIC_EnableIRQ(TIM3_IRQn);
-	LL_TIM_EnableIT_CC2(TIM3);
+	LL_TIM_EnableIT_CC3(TIM3);
 	LL_TIM_CC_EnableChannel(TIM3, LL_TIM_CHANNEL_CH2);
 	LL_TIM_EnableCounter(TIM3);
+
 }
 
-void GPIO_Cofig(void){
+/*void GPIO_Cofig(void){
 	LL_GPIO_InitTypeDef timic_gpio;
 	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
 	//GPIO_Config
@@ -172,7 +231,7 @@ void GPIO_Cofig(void){
 	timic_gpio.Pin = LL_GPIO_PIN_5;
 	LL_GPIO_Init(GPIOA,&timic_gpio);
 
-}
+}*/
 void SystemClock_Config(void)
 {
   /* Enable ACC64 access and set FLASH latency */ 
@@ -226,3 +285,6 @@ void SystemClock_Config(void)
   /* Update CMSIS variable (which can be updated also through SystemCoreClockUpdate function) */
   LL_SetSystemCoreClock(32000000);
 }
+
+
+
