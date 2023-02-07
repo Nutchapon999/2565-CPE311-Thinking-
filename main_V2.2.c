@@ -129,7 +129,7 @@ void Speaker_Config(void)
 
 	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
 	
-	gpio_conf.Pin = LL_GPIO_PIN_7 ;
+	gpio_conf.Pin = LL_GPIO_PIN_4 ;
   gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
 	gpio_conf.Pull = LL_GPIO_PULL_NO;
 	gpio_conf.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
