@@ -47,7 +47,6 @@ int main()
 		TIMX_IC_Config();
 		Ultrasonic_Config();
 		USART_Configure();
-		int number = 4532;
 		uint8_t text[] ="            \n";
 		while(1){
 			LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_2);
