@@ -13,19 +13,19 @@
 #include "math.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "tcs3200.h"
 
-//speaker variables
-#define E_06 (uint16_t)1318
+#define VIRTUALIZAR_SENSOR 0
+
+#define E_06 (uint16_t)1318 //??????????? E
+#define F_06 (uint16_t)1397
 #define TIMx_PSC 2
-#define ARR_CALCULATE(N) ((32000000) / ((TIMx_PSC) * (N)))
-uint16_t E = E_06;
-//uint16_t ARR = 0;
-//TIM4
-//void TIM_OC_Config(uint16_t);
-void TIM_Base_Config(uint16_t);
-
+#define ARR_CALCULATE(N) ((32000000)/((TIMx_PSC)*(N)))
 /*uint8_t usr_button = 0;
 unsigned int state = 0;*/
+void TIM_BASE_Config(uint16_t);
+void TIM_OC_Config(uint16_t);
+
 void GPIO_USART_Configure(void);
 void SystemClock_Config(void);
 void USART_Configure(void);
@@ -35,9 +35,9 @@ void TCS3200_Config(void); //Color Sensor
 void Ultrasonic_Config(void); //Ultrasonic senser
 void Speaker_Config(void); //Speaker Module
 
-//TIM2
-void TIMX_IC_Config(uint16_t ARR);
-
+//TIM
+void TIMX_IC_Config(void);
+uint16_t a = 3000;
 uint16_t uwIC1 = 0;
 uint16_t uwIC2 = 0;
 uint16_t uwDiff = 0;
@@ -46,36 +46,61 @@ uint32_t TIM2CLK;
 uint32_t PSC;
 uint32_t IC1PSC;
 int distant, i;
-
+int ARR = 3000;
 uint8_t recv_buffer[10];
 uint8_t idx = 0;
+int colorRed, colorGreen, colorBlue;
 
 int main()
  {
 
 		SystemClock_Config();
-		
+	 
+	  Captura_TCS3200_Init();
+	  TCS3200_Config();
+	 
+	  Speaker_Config();
+	  
+		TIMX_IC_Config();
 		Ultrasonic_Config();
 		USART_Configure();
-		uint8_t text[] ="            \n";
+		uint8_t text[] ="                                                                                    \n";
+    Set_Filter(Clear);
+	  Set_Scaling(Scl100);
 	
-	  TIMX_IC_Config(ARR_CALCULATE(E));
-	  
+	colorRed = 0;
+	colorGreen = 0;
+	colorBlue = 0;
 		while(1){
 			LL_GPIO_SetOutputPin(GPIOA, LL_GPIO_PIN_2);
 			LL_mDelay(1);
 			LL_GPIO_ResetOutputPin(GPIOA, LL_GPIO_PIN_2);
+			colorRed = GetColor(Red);
+	  	colorGreen = GetColor(Green);
+		  colorBlue = GetColor(Blue);
+		  TIM_OC_Config(ARR_CALCULATE(E_06));
+			
+			
+		if(VIRTUALIZAR_SENSOR){
+			colorRed = colorRed + 10;
+			colorGreen = colorGreen + 5;
+			colorBlue = colorBlue + 15;
+			
+			if(colorRed >= 255) colorRed = 0;
+			if(colorGreen >= 255) colorGreen = 0;
+			if(colorBlue >= 255) colorBlue = 0;
+		}
 			if(uhICIndex == 2){
 				//Period Calculation
 				PSC = LL_TIM_GetPrescaler(TIM2) + 1;
 				TIM2CLK = SystemCoreClock / PSC;
-				IC1PSC = __LL_TIM_GET_ICPSC_RATIO(LL_TIM_IC_GetPrescaler(TIM2, LL_TIM_CHANNEL_CH1));
+				IC1PSC = __LL_TIM_GET_ICPSC_RATIO(LL_TIM_IC_GetPrescaler(TIM2, LL_TIM_CHANNEL_CH2));
 
 				//Distance Calculation
 				distant = ((uwDiff*340.0*pow(10,2))/2.0)/SystemCoreClock;
 				
 				//Format the integer as a two-digit string
-				sprintf(text, "%02d", distant);
+				sprintf(text, "distant : %02d | Color : RED  %02d GREEN %02d BLUE %02d", distant ,colorRed,colorGreen,colorBlue);
 				
 				//Send distance to Tera Term
 				USART_SendString(text,sizeof(text));
@@ -86,6 +111,68 @@ int main()
 		}
 	}
 }
+ void TIM_BASE_DurationConfig(void)
+{
+	LL_TIM_InitTypeDef timbase_initstructure;
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM3);
+
+	timbase_initstructure.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
+	timbase_initstructure.CounterMode = LL_TIM_COUNTERMODE_UP;
+	timbase_initstructure.Autoreload = 200-1;
+	timbase_initstructure.Prescaler = 32000 -1;
+
+	LL_TIM_Init(TIM3,  &timbase_initstructure);
+	LL_TIM_EnableIT_UPDATE(TIM3); 
+	
+	LL_TIM_ClearFlag_UPDATE(TIM3);
+
+	NVIC_SetPriority(TIM3_IRQn, 0);
+	NVIC_EnableIRQ(TIM3_IRQn);
+
+	LL_TIM_EnableCounter(TIM3);
+	
+}
+void TIM_BASE_Config(uint16_t ARR)
+{
+	LL_TIM_InitTypeDef timbase_initstructure;
+
+	
+	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM4);
+
+	timbase_initstructure.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
+	timbase_initstructure.CounterMode = LL_TIM_COUNTERMODE_UP;
+	timbase_initstructure.Autoreload = ARR -1;
+	timbase_initstructure.Prescaler = TIMx_PSC -1;
+	
+	LL_TIM_Init(TIM4,  &timbase_initstructure);
+
+	LL_TIM_EnableCounter(TIM4);
+}
+
+void TIM_OC_Config(uint16_t note)
+{
+	LL_TIM_OC_InitTypeDef tim_oc_initstructure;
+	
+	Speaker_Config();
+	TIM_BASE_Config(note);
+	
+	tim_oc_initstructure.OCState = LL_TIM_OCSTATE_DISABLE;
+	tim_oc_initstructure.OCMode = LL_TIM_OCMODE_PWM1;
+	tim_oc_initstructure.OCPolarity = LL_TIM_OCPOLARITY_HIGH;
+	tim_oc_initstructure.CompareValue = LL_TIM_GetAutoReload(TIM4)/2; //duty cycle 50% ????????
+	
+	LL_TIM_OC_Init(TIM4, LL_TIM_CHANNEL_CH3, &tim_oc_initstructure);
+	
+	//interrupt config
+	NVIC_SetPriority(TIM4_IRQn, 0);
+	NVIC_EnableIRQ(TIM4_IRQn);
+	LL_TIM_EnableIT_CC3(TIM4);
+	
+	LL_TIM_CC_EnableChannel(TIM4, LL_TIM_CHANNEL_CH3);
+	LL_TIM_EnableCounter(TIM4);
+}
+
+
 void USART_SendString(uint8_t* str, uint8_t size)
 {
 	uint8_t i = 0;
@@ -96,28 +183,7 @@ void USART_SendString(uint8_t* str, uint8_t size)
 		++i;
 	}
 }	
-void TCS3200_Config(void)
-{
-	//TCS3200 config
-	LL_GPIO_InitTypeDef gpio_conf;
 
-	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
-	
-	gpio_conf.Pin = LL_GPIO_PIN_10 | LL_GPIO_PIN_11 | LL_GPIO_PIN_12 | LL_GPIO_PIN_13 ; //Input mode S0-S3
-	gpio_conf.Mode = LL_GPIO_MODE_INPUT;
-	gpio_conf.Pull = LL_GPIO_PULL_UP;
-	gpio_conf.Speed =LL_GPIO_SPEED_FREQ_VERY_HIGH;
-	gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  LL_GPIO_Init(GPIOB, &gpio_conf);
-	
-	gpio_conf.Pin = LL_GPIO_PIN_14; //LED Output mode 
-	gpio_conf.Mode = LL_GPIO_MODE_OUTPUT;
-	gpio_conf.Pull = LL_GPIO_PULL_UP;
-	gpio_conf.Speed =LL_GPIO_SPEED_FREQ_VERY_HIGH;
-	gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
-  LL_GPIO_Init(GPIOB, &gpio_conf);
-	
-}
 void Ultrasonic_Config(void)
 {
 	LL_GPIO_InitTypeDef timic_gpio;
@@ -136,62 +202,18 @@ void Ultrasonic_Config(void)
 	LL_GPIO_Init(GPIOA,&timic_gpio);
 	
 }
-void TIM_Base_Config(uint16_t ARR)
-{
-	LL_TIM_InitTypeDef timbase_initstructure;
-	
-	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
-	
-	timbase_initstructure.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
-	timbase_initstructure.CounterMode = LL_TIM_COUNTERMODE_UP;
-	timbase_initstructure.Autoreload = ARR - 1;
-	timbase_initstructure.Prescaler = 36000 -1;
-	LL_TIM_Init(TIM2 , &timbase_initstructure);
-	
-	LL_TIM_EnableCounter(TIM2);
-}
-/*void TIM4_IRQHandler(void)
-{
-	if(LL_TIM_IsActiveFlag_CC1(TIM4) == SET)
-	{
-		LL_TIM_ClearFlag_CC1(TIM4);
-	}
-}
-*/
-/*void TIM_OC_Config(uint16_t note)
-{
-	LL_TIM_OC_InitTypeDef tim_oc_inintstructure;
-	
-	Speaker_Config();
-	TIM_Base_Config(note);
-	
-	tim_oc_inintstructure.OCState = LL_TIM_OCSTATE_DISABLE;
-	tim_oc_inintstructure.OCMode = LL_TIM_OCMODE_PWM2;
-	tim_oc_inintstructure.OCPolarity = LL_TIM_OCPOLARITY_HIGH;
-	tim_oc_inintstructure.CompareValue = LL_TIM_GetAutoReload(TIM4);
-	LL_TIM_OC_Init(TIM4,LL_TIM_CHANNEL_CH3,&tim_oc_inintstructure);
-	
-	NVIC_SetPriority(TIM4_IRQn,1);
-	NVIC_EnableIRQ(TIM4_IRQn);
-	LL_TIM_EnableIT_CC1(TIM4);
-	
-	LL_TIM_CC_EnableChannel(TIM4,LL_TIM_CHANNEL_CH3);
-	LL_TIM_EnableCounter(TIM4);
-}
-*/
 void Speaker_Config(void)
 {
 	LL_GPIO_InitTypeDef gpio_conf;
 
 	LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
 	
-	gpio_conf.Pin = LL_GPIO_PIN_8 ;
+	gpio_conf.Pin = LL_GPIO_PIN_8;
   gpio_conf.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
 	gpio_conf.Pull = LL_GPIO_PULL_NO;
 	gpio_conf.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
-	gpio_conf.Mode = LL_GPIO_MODE_ALTERNATE;
 	gpio_conf.Alternate = LL_GPIO_AF_2;
-	
+	gpio_conf.Mode = LL_GPIO_MODE_ALTERNATE;
   LL_GPIO_Init(GPIOB, &gpio_conf);
 }
 
@@ -229,6 +251,26 @@ void TIM2_IRQHandler(void){
 		}
 	}
 }
+void TIM4_IRQHandler(void)
+{
+	if(LL_TIM_IsActiveFlag_CC3(TIM4) == SET)
+	{	
+		
+		LL_TIM_ClearFlag_CC3(TIM4);
+		
+	}
+}
+void TIM3_IRQHandler(void)
+{
+	if(LL_TIM_IsActiveFlag_UPDATE(TIM3) == SET)
+	{
+		if(distant <= 15)
+		{
+	  TIM_OC_Config(ARR_CALCULATE(F_06));
+		}
+		LL_TIM_ClearFlag_UPDATE(TIM3);
+	}
+}
 
 void GPIO_USART_Configure(void)
 {
@@ -245,13 +287,9 @@ void GPIO_USART_Configure(void)
 	LL_GPIO_Init(GPIOB, &gpio_conf);
 }
 
-void TIMX_IC_Config(uint16_t note)
-{
+void TIMX_IC_Config(void){
+	
 	LL_TIM_IC_InitTypeDef timic;
-	
-	Speaker_Config();
-	TIM_Base_Config(note);
-	
 	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
 	//TIM_IC Configure CH1
 	timic.ICActiveInput = LL_TIM_ACTIVEINPUT_DIRECTTI;
